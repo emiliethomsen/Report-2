@@ -1,0 +1,849 @@
+import mikeio
+import pandas as pd
+import matplotlib.pyplot as plt
+from sklearn.metrics import mean_squared_error, mean_absolute_error
+import numpy as np
+
+
+# ========================== LOAD DATA ===========================
+
+# LOAD MIKE DATA
+
+data = mikeio.read("C:/Users/emskt/OneDrive - Danmarks Tekniske Universitet/PhD/Courses/Computational marine ecological modelling/Report 2/OdenseFjord2015/Odense resultater/Temp_Sal.dfsu")
+
+# Define the stations 
+st17 = data.sel(x = 596013, y = 6149164)
+
+#%%
+# ========================== TEMPERATURE ===========================
+
+# LOAD NOVANA DATA
+
+novana_temp = pd.read_excel("C:/Users/emskt/OneDrive - Danmarks Tekniske Universitet/PhD/Courses/Computational marine ecological modelling/Report 2/Data files/Odensefj_st17_temp.xlsx")
+# Convert data (using . instead of ,)
+novana_temp["Dato"] = pd.to_datetime(novana_temp["Dato"], format="%Y-%m-%d")
+novana_temp["Resultat"] = novana_temp["Resultat"].astype(str).str.replace(",", ".").astype(float)
+novana_temp["Dybde"] = novana_temp["Dybde"].astype(str).str.replace(",", ".").astype(float)
+# Now filter for surface data (depth ≤ 2)
+novana_temp_surface = novana_temp[novana_temp["Dybde"] <= 2]
+# Now filter for surface data (depth >8)
+novana_temp_bottom = novana_temp[novana_temp["Dybde"] >= 8]
+
+# Ensure observation times are in datetime64 format
+# Interpolate model data to observation timestamps
+obs_surface_times_temp = pd.to_datetime(novana_temp_surface["Dato"].values)
+
+# Use .sel() with method="nearest"
+model_surface_temp = st17['Temperature'].isel(element=0).interp(time=obs_surface_times_temp).values
+
+obs_bottom_times_temp = pd.to_datetime(novana_temp_bottom["Dato"].values)  # Ensure datetime format
+model_bottom_temp = st17['Temperature'].isel(element=4).interp(time=obs_bottom_times_temp).values
+
+# Extract corresponding observed data
+obs_surface_temp = novana_temp_surface["Resultat"].values
+obs_bottom_temp = novana_temp_bottom["Resultat"].values
+
+# ========================== PLOTTING TEMPERATURE ===========================
+
+# Show model data for surface temp and station
+# Plot temperature map with station location
+ax = data['Temperature'].sel(time="2015-08-06 12:00").plot(vmin=14, vmax=18)
+ax.scatter(596013,6149164, marker ="s", s=25, c = 'red')
+ax.set_title("Temperature on 2015-08-06 at 12:00", fontsize=14)
+plt.show()
+
+# SURFACE TEMPERATURE 
+
+# Create a figure and axis
+fig, ax = plt.subplots(figsize=(10, 5))
+
+# Plot MIKE model data (Temperature at element 0)
+st17['Temperature'].isel(element=0).plot(ax=ax, label="MIKE Model Temperature", color="red")
+
+# Plot Excel surface data (Observations)
+ax.plot(novana_temp_surface["Dato"], novana_temp_surface["Resultat"], marker="o", linestyle="-", color="blue", label="Observed Surface Temperature (Depth ≤ 2)")
+
+# Formatting
+ax.set_xlabel("Date")
+ax.set_ylabel("Temperature (°C)")
+#ax.set_title("Temperature: MIKE Model vs Observations (Surface Data)")
+ax.legend()
+ax.grid(True)
+
+plt.xticks(rotation=45)  # Rotate x-axis labels for better readability
+plt.show()
+
+# RESIDUAL PLOT (SURFACE)
+Residuals_surface_temp = model_surface_temp - obs_surface_temp
+zero = np.zeros_like(Residuals_surface_temp)
+
+plt.plot(novana_temp_surface["Dato"], Residuals_surface_temp, color = 'royalblue')
+plt.plot(novana_temp_surface["Dato"], zero, color = 'lightcoral')
+plt.xlabel('Time')
+plt.ylabel('Residuals')
+#plt.legend('Surface temperature')
+plt.title('Surface Temperature')
+plt.grid(False)
+plt.tight_layout()
+plt.show()
+
+
+# BOTTOM TEMPERATURE 
+# Create a figure and axis
+fig, ax = plt.subplots(figsize=(10, 5))
+
+# Plot MIKE model data (Temperature at element 0)
+st17['Temperature'].isel(element=4).plot(ax=ax, label="MIKE Model Temperature", color="red")
+
+# Plot Excel surface data (Observations)
+ax.plot(novana_temp_bottom["Dato"], novana_temp_bottom["Resultat"], marker="o", linestyle="-", color="blue", label="Observed Bottom Temperature (Depth > 8)")
+
+# Formatting
+ax.set_xlabel("Date")
+ax.set_ylabel("Temperature (°C)")
+#ax.set_title("Temperature: MIKE Model vs Observations (Bottom Data)")
+ax.legend()
+ax.grid(True)
+
+plt.xticks(rotation=45)  # Rotate x-axis labels for better readability
+plt.show()
+
+# RESIDUAL PLOT (BOTTOM)
+Residuals_bottom_temp = model_bottom_temp - obs_bottom_temp
+zero = np.zeros_like(Residuals_bottom_temp)
+
+plt.plot(novana_temp_bottom["Dato"], Residuals_bottom_temp, color = 'royalblue')
+plt.plot(novana_temp_bottom["Dato"], zero, color = 'lightcoral')
+plt.xlabel('Time')
+plt.ylabel('Residuals')
+#plt.legend('Surface temperature')
+plt.title('Bottom Temperature')
+plt.grid(False)
+plt.tight_layout()
+plt.show()
+
+# ========================== ERROR METRICS ===========================
+
+# Mean Squared Error (MSE)
+mse_surface_temp = mean_squared_error(obs_surface_temp, model_surface_temp)
+mse_bottom_temp = mean_squared_error(obs_bottom_temp, model_bottom_temp)
+
+# Root Mean Squared Error (RMSE)
+rmse_surface_temp = np.sqrt(mse_surface_temp)
+rmse_bottom_temp = np.sqrt(mse_bottom_temp)
+
+# Mean Absolute Error (MAE)
+mae_surface_temp = mean_absolute_error(obs_surface_temp, model_surface_temp)
+mae_bottom_temp = mean_absolute_error(obs_bottom_temp, model_bottom_temp)
+
+# Absolute Maximum Error (AME)
+ame_surface_temp = np.max(np.abs(obs_surface_temp - model_surface_temp))
+ame_bottom_temp = np.max(np.abs(obs_bottom_temp - model_bottom_temp))
+
+# Bias (Mean Error)
+bias_surface_temp = np.mean(model_surface_temp - obs_surface_temp)
+bias_bottom_temp = np.mean(model_bottom_temp - obs_bottom_temp)
+
+# Print the results
+print("Surface Temperature Errors:")
+print(f"MSE: {mse_surface_temp:.3f}, RMSE: {rmse_surface_temp:.3f}, MAE: {mae_surface_temp:.3f}, AME: {ame_surface_temp:.3f}, Bias: {bias_surface_temp:.3f}")
+
+print("\nBottom Temperature Errors:")
+print(f"MSE: {mse_bottom_temp:.3f}, RMSE: {rmse_bottom_temp:.3f}, MAE: {mae_bottom_temp:.3f}, AME: {ame_bottom_temp:.3f}, Bias: {bias_bottom_temp:.3f}")
+
+#%%
+# ========================== SALINITY ===========================
+
+# LOAD NOVANA DATA
+
+novana_sal = pd.read_excel("C:/Users/emskt/OneDrive - Danmarks Tekniske Universitet/PhD/Courses/Computational marine ecological modelling/Report 2/Data files/Odensefj_st17_salinity.xlsx")
+
+# Convert data (using . instead of ,)
+novana_sal["Dato"] = pd.to_datetime(novana_sal["Dato"], format="%Y-%m-%d")
+novana_sal["Resultat"] = novana_sal["Resultat"].astype(str).str.replace(",", ".").astype(float)
+novana_sal["Dybde"] = novana_sal["Dybde"].astype(str).str.replace(",", ".").astype(float)
+# Now filter for surface data (Dybde ≤ 2)
+novana_sal_surface = novana_sal[novana_sal["Dybde"] <= 2]
+# Now filter for surface data (Dybde >8)
+novana_sal_bottom = novana_sal[novana_sal["Dybde"] >= 8]
+
+# Ensure observation times are in datetime64 format
+obs_surface_times_sal = pd.to_datetime(novana_sal_surface["Dato"].values)
+
+# Use .sel() with method="nearest"
+model_surface_sal = st17['Salinity'].isel(element=0).interp(time=obs_surface_times_sal).values
+
+obs_bottom_times_sal = pd.to_datetime(novana_sal_bottom["Dato"].values)  # Ensure datetime format
+model_bottom_sal = st17['Salinity'].isel(element=4).interp(time=obs_bottom_times_sal).values
+
+# Extract corresponding observed data
+obs_surface_sal = novana_sal_surface["Resultat"].values
+obs_bottom_sal = novana_sal_bottom["Resultat"].values
+
+
+# ========================== PLOTTING SALINITY ===========================
+
+# Show model data for surface salinity and station
+ax = data['Salinity'].sel(time="2015-08-06 12:00").plot(vmin=10,vmax=20)
+ax.scatter(596013,6149164, marker ="s", s=25, c = 'red')
+ax.set_title("Salinity on 2015-08-06 at 12:00", fontsize=14)
+
+
+# SURFACE SALINITY 
+
+# Create a figure and axis
+fig, ax = plt.subplots(figsize=(10, 5))
+
+# Plot MIKE model data (Temperature at element 0)
+st17['Salinity'].isel(element=0).plot(ax=ax, label="MIKE Model Salinity", color="red")
+
+# Plot Excel surface data (Observations)
+ax.plot(novana_sal_surface["Dato"], novana_sal_surface["Resultat"], marker="o", linestyle="-", color="blue", label="Observed Surface Salinity (Depth ≤ 2)")
+
+# Formatting
+ax.set_xlabel("Date")
+ax.set_ylabel("Salinity (psu)")
+#ax.set_title("Temperature: MIKE Model vs Observations (Surface Data)")
+ax.legend()
+ax.grid(True)
+
+plt.xticks(rotation=45)  # Rotate x-axis labels for better readability
+plt.show()
+
+Residuals_surface_sal = model_surface_sal - obs_surface_sal
+zero = np.zeros_like(Residuals_surface_sal)
+
+plt.plot(novana_sal_surface["Dato"], Residuals_surface_sal, color = 'royalblue')
+plt.plot(novana_sal_surface["Dato"], zero, color = 'lightcoral')
+plt.xlabel('Time')
+plt.ylabel('Residuals')
+#plt.legend('Surface temperature')
+plt.title('Surface Salinity')
+plt.grid(False)
+plt.tight_layout()
+plt.show()
+
+# BOTTOM TEMPERATURE 
+# Create a figure and axis
+fig, ax = plt.subplots(figsize=(10, 5))
+
+# Plot MIKE model data (Temperature at element 0)
+st17['Salinity'].isel(element=4).plot(ax=ax, label="MIKE Model Salinity", color="red")
+
+# Plot Excel surface data (Observations)
+ax.plot(novana_sal_bottom["Dato"], novana_sal_bottom["Resultat"], marker="o", linestyle="-", color="blue", label="Observed Bottom Salinity (Depth > 8)")
+
+# Formatting
+ax.set_xlabel("Date")
+ax.set_ylabel("Salinity (psu)")
+#ax.set_title("Temperature: MIKE Model vs Observations (Bottom Data)")
+ax.legend()
+ax.grid(True)
+
+plt.xticks(rotation=45)  # Rotate x-axis labels for better readability
+plt.show()
+
+Residuals_bottom_sal = model_bottom_sal - obs_bottom_sal
+zero = np.zeros_like(Residuals_bottom_sal)
+
+plt.plot(novana_sal_bottom["Dato"], Residuals_bottom_sal, color = 'royalblue')
+plt.plot(novana_sal_bottom["Dato"], zero, color = 'lightcoral')
+plt.xlabel('Time')
+plt.ylabel('Residuals')
+#plt.legend('Surface temperature')
+plt.title('Bottom Salinity')
+plt.grid(False)
+plt.tight_layout()
+plt.show()
+
+# ========================== ERROR METRICS ===========================
+
+# Mean Squared Error (MSE)
+mse_surface_sal = mean_squared_error(obs_surface_sal, model_surface_sal)
+mse_bottom_sal = mean_squared_error(obs_bottom_sal, model_bottom_sal)
+
+# Root Mean Squared Error (RMSE)
+rmse_surface_sal = np.sqrt(mse_surface_sal)
+rmse_bottom_sal = np.sqrt(mse_bottom_sal)
+
+# Mean Absolute Error (MAE)
+mae_surface_sal = mean_absolute_error(obs_surface_sal, model_surface_sal)
+mae_bottom_sal = mean_absolute_error(obs_bottom_sal, model_bottom_sal)
+
+# Absolute Maximum Error (AME)
+ame_surface_sal = np.max(np.abs(obs_surface_sal - model_surface_sal))
+ame_bottom_sal = np.max(np.abs(obs_bottom_sal - model_bottom_sal))
+
+# Bias (Mean Error)
+bias_surface_sal = np.mean(model_surface_sal - obs_surface_sal)
+bias_bottom_sal = np.mean(model_bottom_sal - obs_bottom_sal)
+
+# Print the results
+print("Surface Salinity Errors:")
+print(f"MSE: {mse_surface_sal:.3f}, RMSE: {rmse_surface_sal:.3f}, MAE: {mae_surface_sal:.3f}, AME: {ame_surface_sal:.3f}, Bias: {bias_surface_sal:.3f}")
+
+print("\nBottom Salinity Errors:")
+print(f"MSE: {mse_bottom_sal:.3f}, RMSE: {rmse_bottom_sal:.3f}, MAE: {mae_bottom_sal:.3f}, AME: {ame_bottom_sal:.3f}, Bias: {bias_bottom_sal:.3f}")
+
+#%%
+# ========================== CHLOROPHYLL ===========================
+
+#LOAD NEW MIKE DATA
+data2 = mikeio.read("C:/Users/emskt/OneDrive - Danmarks Tekniske Universitet/PhD/Courses/Computational marine ecological modelling/Report 2/OdenseFjord2015/Odense resultater/ECO.dfsu")
+st17 = data2.sel(x = 596013, y = 6149164)
+
+# LOAD NOVANA DATA
+
+novana_chla = pd.read_excel("C:/Users/emskt/OneDrive - Danmarks Tekniske Universitet/PhD/Courses/Computational marine ecological modelling/Report 2/Data files/Odensefj_st17_Chla.xlsx")
+
+# Convert data (using . instead of ,)
+novana_chla["Dato"] = pd.to_datetime(novana_chla["Dato"], format="%Y-%m-%d")
+novana_chla["Resultat"] = novana_chla["Resultat"].astype(str).str.replace(",", ".").astype(float)
+novana_chla["Dybde"] = novana_chla["Dybde"].astype(str).str.replace(",", ".").astype(float)
+
+#Change unit of chlorophyll from the novana data 
+novana_chla["Resultat"] = novana_chla["Resultat"] * 10**(-3)
+
+# Now filter for surface data (Dybde ≤ 2)
+novana_chla_surface = novana_chla[novana_chla["Dybde"] <= 2]
+# Now filter for surface data (Dybde >8)
+novana_chla_bottom = novana_chla[novana_chla["Dybde"] >= 4]
+
+
+# Ensure observation times are in datetime64 format
+obs_surface_times_chla = pd.to_datetime(novana_chla_surface["Dato"].values)
+
+# Use .sel() with method="nearest"
+model_surface_chla = st17['CH, CH, Chlorophyll-a, g Chl/m3'].isel(element=0).interp(time=obs_surface_times_chla).values
+
+obs_bottom_times_chla = pd.to_datetime(novana_chla_bottom["Dato"].values)  # Ensure datetime format
+model_bottom_chla = st17['CH, CH, Chlorophyll-a, g Chl/m3'].isel(element=4).interp(time=obs_bottom_times_chla).values
+
+# Extract corresponding observed data
+obs_surface_chla = novana_chla_surface["Resultat"].values
+obs_bottom_chla = novana_chla_bottom["Resultat"].values
+
+
+
+# ========================== PLOTTING CHLOROPHYLL ===========================
+
+# Show model data for surface salinity and station
+ax = data2['CH, CH, Chlorophyll-a, g Chl/m3'].sel(time="2015-08-06 12:00").plot(vmin=0, vmax=0.003)
+ax.scatter(596013,6149164, marker ="s", s=25, c = 'red')
+ax.set_title("Chlorophyll-a on 2015-08-06 at 12:00", fontsize=14)
+
+# SURFACE CHLOROPHYLL 
+
+# Create a figure and axis
+fig, ax = plt.subplots(figsize=(10, 5))
+
+# Plot MIKE model data (Temperature at element 0)
+st17['CH, CH, Chlorophyll-a, g Chl/m3'].isel(element=0).plot(ax=ax, label="MIKE Model Chlorophyll", color="red")
+
+# Plot Excel surface data (Observations)
+ax.plot(novana_chla_surface["Dato"], novana_chla_surface["Resultat"], marker="o", linestyle="-", color="blue", label="Observed Surface Chlorophyll (Depth ≤ 2)")
+
+# Formatting
+ax.set_xlabel("Date")
+ax.set_ylabel("Chlorophyll-a (g Chl m$^{-3}$)")
+#ax.set_title("Chlorophyll: MIKE Model vs Observations (Surface Data)")
+ax.legend()
+ax.grid(True)
+
+plt.xticks(rotation=45)  # Rotate x-axis labels for better readability
+plt.show()
+
+
+Residuals_surface_chla = model_surface_chla - obs_surface_chla
+zero = np.zeros_like(Residuals_surface_chla)
+
+plt.plot(novana_chla_surface["Dato"], Residuals_surface_chla, color = 'royalblue')
+plt.plot(novana_chla_surface["Dato"], zero, color = 'lightcoral')
+plt.xlabel('Time')
+plt.ylabel('Residuals')
+#plt.legend('Surface temperature')
+plt.title('Surface Chlorophyll')
+plt.grid(False)
+plt.tight_layout()
+plt.show()
+
+# BOTTOM CHLOROPHYLL 
+# Create a figure and axis
+fig, ax = plt.subplots(figsize=(10, 5))
+
+# Plot MIKE model data (Temperature at element 0)
+st17['CH, CH, Chlorophyll-a, g Chl/m3'].isel(element=4).plot(ax=ax, label="MIKE Model Chlorophyll", color="red")
+
+# Plot Excel surface data (Observations)
+ax.plot(novana_chla_bottom["Dato"], novana_chla_bottom["Resultat"], marker="o", linestyle="-", color="blue", label="Observed Bottom Chlorophyll (Depth > 4)")
+
+# Formatting
+ax.set_xlabel("Date")
+ax.set_ylabel("Chlorophyll-a (g Chl m$^{-3}$)")
+#ax.set_title("Chlorophyll: MIKE Model vs Observations (Bottom Data)")
+ax.legend()
+ax.grid(True)
+
+plt.xticks(rotation=45)  # Rotate x-axis labels for better readability
+plt.show()
+
+Residuals_bottom_chla = model_bottom_chla - obs_bottom_chla
+zero = np.zeros_like(Residuals_bottom_chla)
+
+plt.plot(novana_chla_bottom["Dato"], Residuals_bottom_chla, color = 'royalblue')
+plt.plot(novana_chla_bottom["Dato"], zero, color = 'lightcoral')
+plt.xlabel('Time')
+plt.ylabel('Residuals')
+#plt.legend('bottom temperature')
+plt.title('Bottom chlorophyll')
+plt.grid(False)
+plt.tight_layout()
+plt.show()
+
+
+# ========================== ERROR METRICS ===========================
+
+# Mean Squared Error (MSE)
+mse_surface_chla = mean_squared_error(obs_surface_chla, model_surface_chla)
+mse_bottom_chla = mean_squared_error(obs_bottom_chla, model_bottom_chla)
+
+# Root Mean Squared Error (RMSE)
+rmse_surface_chla = np.sqrt(mse_surface_chla)
+rmse_bottom_chla = np.sqrt(mse_bottom_chla)
+
+# Mean Absolute Error (MAE)
+mae_surface_chla = mean_absolute_error(obs_surface_chla, model_surface_chla)
+mae_bottom_chla = mean_absolute_error(obs_bottom_chla, model_bottom_chla)
+
+# Absolute Maximum Error (AME)
+ame_surface_chla = np.max(np.abs(obs_surface_chla - model_surface_chla))
+ame_bottom_chla = np.max(np.abs(obs_bottom_chla - model_bottom_chla))
+
+# Bias (Mean Error)
+bias_surface_chla = np.mean(model_surface_chla - obs_surface_chla)
+bias_bottom_chla = np.mean(model_bottom_chla - obs_bottom_chla)
+
+# Print the results
+print("Surface Chlorophyll Errors:")
+print(f"MSE: {mse_surface_chla:.6f}, RMSE: {rmse_surface_chla:.3f}, MAE: {mae_surface_chla:.3f}, AME: {ame_surface_chla:.3f}, Bias: {bias_surface_chla:.6f}")
+
+print("\nBottom Chlorophyll Errors:")
+print(f"MSE: {mse_bottom_chla:.6f}, RMSE: {rmse_bottom_chla:.3f}, MAE: {mae_bottom_chla:.3f}, AME: {ame_bottom_chla:.3f}, Bias: {bias_bottom_chla:.6f}")
+
+#%%
+# ========================== PHOSPHOROUS ===========================
+
+
+# LOAD NOVANA DATA
+
+novana_DIP = pd.read_excel("C:/Users/emskt/OneDrive - Danmarks Tekniske Universitet/PhD/Courses/Computational marine ecological modelling/Report 2/Data files/Odensefj_st17_DIP.xlsx")
+
+# Convert data (using . instead of ,)
+novana_DIP["Dato"] = pd.to_datetime(novana_DIP["Dato"], format="%Y-%m-%d")
+novana_DIP["Resultat"] = novana_DIP["Resultat"].astype(str).str.replace(",", ".").astype(float)
+novana_DIP["Dybde"] = novana_DIP["Dybde"].astype(str).str.replace(",", ".").astype(float)
+
+#Change unit of chlorophyll from the novana data 
+novana_DIP["Resultat"] = novana_DIP["Resultat"] * 10**(-3)
+
+# Now filter for surface data (Dybde ≤ 2)
+novana_DIP_surface = novana_DIP[novana_DIP["Dybde"] <= 2]
+# Now filter for surface data (Dybde >8)
+novana_DIP_bottom = novana_DIP[novana_DIP["Dybde"] >= 4]
+
+# Ensure observation times are in datetime64 format
+obs_surface_times_DIP = pd.to_datetime(novana_DIP_surface["Dato"].values)
+
+# Use .sel() with method="nearest"
+model_surface_DIP = st17['IP, IP, phosphate, g P/m3'].isel(element=0).interp(time=obs_surface_times_DIP).values
+
+obs_bottom_times_DIP = pd.to_datetime(novana_DIP_bottom["Dato"].values)  # Ensure datetime format
+model_bottom_DIP = st17['IP, IP, phosphate, g P/m3'].isel(element=4).interp(time=obs_bottom_times_DIP).values
+
+# Extract corresponding observed data
+obs_surface_DIP = novana_DIP_surface["Resultat"].values
+obs_bottom_DIP = novana_DIP_bottom["Resultat"].values
+
+# ========================== PLOTTING PHOSPHOROUS ===========================
+
+# Show model data for surface salinity and station
+ax = data2['IP, IP, phosphate, g P/m3'].sel(time="2015-08-06 12:00").plot(vmin=0,vmax=0.003)
+ax.scatter(596013,6149164, marker ="s", s=25, c = 'red')
+ax.set_title("Phosphorous on 2015-08-06 at 12:00", fontsize=14)
+
+
+# SURFACE PHOSPHOROUS 
+
+# Create a figure and axis
+fig, ax = plt.subplots(figsize=(10, 5))
+
+# Plot MIKE model data (Temperature at element 0)
+st17['IP, IP, phosphate, g P/m3'].isel(element=0).plot(ax=ax, label="MIKE Model Phosphate", color="red")
+
+# Plot Excel surface data (Observations)
+ax.plot(novana_DIP_surface["Dato"], novana_DIP_surface["Resultat"], marker="o", linestyle="-", color="blue", label="Observed Surface Phosphate (Depth ≤ 2)")
+
+# Formatting
+ax.set_xlabel("Date")
+ax.set_ylabel("Phosphate (g P m$^{-3}$)")
+#ax.set_title("Chlorophyll: MIKE Model vs Observations (Surface Data)")
+ax.legend()
+ax.grid(True)
+
+plt.xticks(rotation=45)  # Rotate x-axis labels for better readability
+plt.show()
+
+
+Residuals_surface_DIP = model_surface_DIP - obs_surface_DIP
+zero = np.zeros_like(Residuals_surface_DIP)
+
+plt.plot(novana_DIP_surface["Dato"], Residuals_surface_DIP, color = 'royalblue')
+plt.plot(novana_DIP_surface["Dato"], zero, color = 'lightcoral')
+plt.xlabel('Time')
+plt.ylabel('Residuals')
+#plt.legend('Surface temperature')
+plt.title('Surface Phosphorous')
+plt.grid(False)
+plt.tight_layout()
+plt.show()
+
+# BOTTOM PHOSPHOROUS 
+# Create a figure and axis
+fig, ax = plt.subplots(figsize=(10, 5))
+
+# Plot MIKE model data (Temperature at element 0)
+st17['IP, IP, phosphate, g P/m3'].isel(element=4).plot(ax=ax, label="MIKE Model Phosphate", color="red")
+
+# Plot Excel surface data (Observations)
+ax.plot(novana_DIP_bottom["Dato"], novana_DIP_bottom["Resultat"], marker="o", linestyle="-", color="blue", label="Observed Bottom Phosphate (Depth > 4)")
+
+# Formatting
+ax.set_xlabel("Date")
+ax.set_ylabel("Phosphate (g P m$^{-3}$)")
+#ax.set_title("Chlorophyll: MIKE Model vs Observations (Bottom Data)")
+ax.legend()
+ax.grid(True)
+
+plt.xticks(rotation=45)  # Rotate x-axis labels for better readability
+plt.show()
+
+Residuals_bottom_DIP = model_bottom_DIP - obs_bottom_DIP
+zero = np.zeros_like(Residuals_bottom_DIP)
+
+plt.plot(novana_DIP_bottom["Dato"], Residuals_bottom_DIP, color = 'royalblue')
+plt.plot(novana_DIP_bottom["Dato"], zero, color = 'lightcoral')
+plt.xlabel('Time')
+plt.ylabel('Residuals')
+#plt.legend('bottom temperature')
+plt.title('Bottom Phosphorous')
+plt.grid(False)
+plt.tight_layout()
+plt.show()
+
+# ========================== ERROR METRICS ===========================
+
+# Mean Squared Error (MSE)
+mse_surface_DIP = mean_squared_error(obs_surface_DIP, model_surface_DIP)
+mse_bottom_DIP = mean_squared_error(obs_bottom_DIP, model_bottom_DIP)
+
+# Root Mean Squared Error (RMSE)
+rmse_surface_DIP = np.sqrt(mse_surface_DIP)
+rmse_bottom_DIP = np.sqrt(mse_bottom_DIP)
+
+# Mean Absolute Error (MAE)
+mae_surface_DIP = mean_absolute_error(obs_surface_DIP, model_surface_DIP)
+mae_bottom_DIP = mean_absolute_error(obs_bottom_DIP, model_bottom_DIP)
+
+# Absolute Maximum Error (AME)
+ame_surface_DIP = np.max(np.abs(obs_surface_DIP - model_surface_DIP))
+ame_bottom_DIP = np.max(np.abs(obs_bottom_DIP - model_bottom_DIP))
+
+# Bias (Mean Error)
+bias_surface_DIP = np.mean(model_surface_DIP - obs_surface_DIP)
+bias_bottom_DIP = np.mean(model_bottom_DIP - obs_bottom_DIP)
+
+# Print the results
+print("Surface Phosphorous Errors:")
+print(f"MSE: {mse_surface_DIP:.6f}, RMSE: {rmse_surface_DIP:.3f}, MAE: {mae_surface_DIP:.3f}, AME: {ame_surface_DIP:.3f}, Bias: {bias_surface_DIP:.3f}")
+
+print("\nBottom Phosphorous Errors:")
+print(f"MSE: {mse_bottom_DIP:.6f}, RMSE: {rmse_bottom_DIP:.3f}, MAE: {mae_bottom_DIP:.3f}, AME: {ame_bottom_DIP:.3f}, Bias: {bias_bottom_DIP:.3f}")
+
+#%%
+# ========================== Ammonium ===========================
+
+novana_NH4 = pd.read_excel("C:/Users/emskt/OneDrive - Danmarks Tekniske Universitet/PhD/Courses/Computational marine ecological modelling/Report 2/Data files/Odensefj_st17_DIN.xlsx")
+
+# Filter the rows where 'Parameter' equals 'Ammoniak+ammonium-N'
+novana_NH4 = novana_NH4[novana_NH4['Parameter'] == 'Ammoniak+ammonium-N']
+
+# Convert data (using . instead of ,)
+novana_NH4["Dato"] = pd.to_datetime(novana_NH4["Dato"], format="%Y-%m-%d")
+novana_NH4["Resultat"] = novana_NH4["Resultat"].astype(str).str.replace(",", ".").astype(float)
+novana_NH4["Dybde"] = novana_NH4["Dybde"].astype(str).str.replace(",", ".").astype(float)
+
+#Change unit of chlorophyll from the novana data 
+novana_NH4["Resultat"] = novana_NH4["Resultat"] * 10**(-3)
+
+# Now filter for surface data (Dybde ≤ 2)
+novana_NH4_surface = novana_NH4[novana_NH4["Dybde"] <= 2]
+# Now filter for surface data (Dybde >8)
+novana_NH4_bottom = novana_NH4[novana_NH4["Dybde"] >= 4]
+
+
+# Ensure observation times are in datetime64 format
+obs_surface_times_NH4 = pd.to_datetime(novana_NH4_surface["Dato"].values)
+
+# Use .sel() with method="nearest"
+model_surface_NH4 = st17['NH4, NH4, NH4-N g N/m3'].isel(element=0).interp(time=obs_surface_times_NH4).values
+
+obs_bottom_times_NH4 = pd.to_datetime(novana_NH4_bottom["Dato"].values)  # Ensure datetime format
+model_bottom_NH4 = st17['NH4, NH4, NH4-N g N/m3'].isel(element=4).interp(time=obs_bottom_times_NH4).values
+
+# Extract corresponding observed data
+obs_surface_NH4 = novana_NH4_surface["Resultat"].values
+obs_bottom_NH4 = novana_NH4_bottom["Resultat"].values
+
+# ========================== PLOTTING AMMONIUM ===========================
+
+# Show model data for ammonia and station
+ax = data2['NH4, NH4, NH4-N g N/m3'].sel(time="2015-08-06 12:00").plot(vmin=0,vmax=0.002)
+ax.scatter(596013,6149164, marker ="s", s=25, c = 'red')
+ax.set_title("Ammonium on 2015-08-06 at 12:00", fontsize=14)
+
+# SURFACE AMMONIUM 
+
+# Create a figure and axis
+fig, ax = plt.subplots(figsize=(10, 5))
+
+# Plot MIKE model data (Temperature at element 0)
+st17['NH4, NH4, NH4-N g N/m3'].isel(element=0).plot(ax=ax, label="MIKE Model Ammonium", color="red")
+
+# Plot Excel surface data (Observations)
+ax.plot(novana_NH4_surface["Dato"], novana_NH4_surface["Resultat"], marker="o", linestyle="-", color="blue", label="Observed Surface Ammonium (Depth ≤ 2)")
+
+# Formatting
+ax.set_xlabel("Date")
+ax.set_ylabel("Ammonium (g N m$^{-3}$)")
+#ax.set_title("Chlorophyll: MIKE Model vs Observations (Surface Data)")
+ax.legend()
+ax.grid(True)
+
+plt.xticks(rotation=45)  # Rotate x-axis labels for better readability
+plt.show()
+
+Residuals_surface_NH4 = model_surface_NH4 - obs_surface_NH4
+zero = np.zeros_like(Residuals_surface_NH4)
+
+plt.plot(novana_NH4_surface["Dato"], Residuals_surface_NH4, color = 'royalblue')
+plt.plot(novana_NH4_surface["Dato"], zero, color = 'lightcoral')
+plt.xlabel('Time')
+plt.ylabel('Residuals')
+#plt.legend('Surface temperature')
+plt.title('Surface Ammonium')
+plt.grid(False)
+plt.tight_layout()
+plt.show()
+
+
+# BOTTOM AMMONIUM 
+# Create a figure and axis
+fig, ax = plt.subplots(figsize=(10, 5))
+
+# Plot MIKE model data (Temperature at element 0)
+st17['NH4, NH4, NH4-N g N/m3'].isel(element=4).plot(ax=ax, label="MIKE Model Ammonium", color="red")
+
+# Plot Excel surface data (Observations)
+ax.plot(novana_DIP_bottom["Dato"], novana_DIP_bottom["Resultat"], marker="o", linestyle="-", color="blue", label="Observed Bottom Ammonium (Depth > 4)")
+
+# Formatting
+ax.set_xlabel("Date")
+ax.set_ylabel("Ammonium (g N m$^{-3}$)")
+#ax.set_title("Chlorophyll: MIKE Model vs Observations (Bottom Data)")
+ax.legend()
+ax.grid(True)
+
+plt.xticks(rotation=45)  # Rotate x-axis labels for better readability
+plt.show()
+
+Residuals_bottom_NH4 = model_bottom_NH4 - obs_bottom_NH4
+zero = np.zeros_like(Residuals_bottom_NH4)
+
+plt.plot(novana_NH4_bottom["Dato"], Residuals_bottom_NH4, color = 'royalblue')
+plt.plot(novana_NH4_bottom["Dato"], zero, color = 'lightcoral')
+plt.xlabel('Time')
+plt.ylabel('Residuals')
+#plt.legend('bottom temperature')
+plt.title('Bottom Ammonium')
+plt.grid(False)
+plt.tight_layout()
+plt.show()
+
+# ========================== ERROR METRICS ===========================
+
+# Mean Squared Error (MSE)
+mse_surface_NH4 = mean_squared_error(obs_surface_NH4, model_surface_NH4)
+mse_bottom_NH4 = mean_squared_error(obs_bottom_NH4, model_bottom_NH4)
+
+# Root Mean Squared Error (RMSE)
+rmse_surface_NH4 = np.sqrt(mse_surface_NH4)
+rmse_bottom_NH4 = np.sqrt(mse_bottom_NH4)
+
+# Mean Absolute Error (MAE)
+mae_surface_NH4 = mean_absolute_error(obs_surface_NH4, model_surface_NH4)
+mae_bottom_NH4 = mean_absolute_error(obs_bottom_NH4, model_bottom_NH4)
+
+# Absolute Maximum Error (AME)
+ame_surface_NH4 = np.max(np.abs(obs_surface_NH4 - model_surface_NH4))
+ame_bottom_NH4 = np.max(np.abs(obs_bottom_NH4 - model_bottom_NH4))
+
+# Bias (Mean Error)
+bias_surface_NH4 = np.mean(model_surface_NH4 - obs_surface_NH4)
+bias_bottom_NH4 = np.mean(model_bottom_NH4 - obs_bottom_NH4)
+
+# Print the results
+print("Surface Ammonium Errors:")
+print(f"MSE: {mse_surface_NH4:.6f}, RMSE: {rmse_surface_NH4:.3f}, MAE: {mae_surface_NH4:.3f}, AME: {ame_surface_NH4:.3f}, Bias: {bias_surface_NH4:.3f}")
+
+print("\nBottom Ammonium Errors:")
+print(f"MSE: {mse_bottom_NH4:.6f}, RMSE: {rmse_bottom_NH4:.3f}, MAE: {mae_bottom_NH4:.3f}, AME: {ame_bottom_NH4:.3f}, Bias: {bias_bottom_NH4:.3f}")
+
+#%%
+# ========================== NITRATE ===========================
+
+novana_NO3 = pd.read_excel("C:/Users/emskt/OneDrive - Danmarks Tekniske Universitet/PhD/Courses/Computational marine ecological modelling/Report 2/Data files/Odensefj_st17_DIN.xlsx")
+
+# Filter the rows where 'Parameter' equals 'Ammoniak+ammonium-N'
+novana_NO3 = novana_NO3[novana_NO3['Parameter'] == 'Nitrit+nitrat-N']
+
+# Convert data (using . instead of ,)
+novana_NO3["Dato"] = pd.to_datetime(novana_NO3["Dato"], format="%Y-%m-%d")
+novana_NO3["Resultat"] = novana_NO3["Resultat"].astype(str).str.replace(",", ".").astype(float)
+novana_NO3["Dybde"] = novana_NO3["Dybde"].astype(str).str.replace(",", ".").astype(float)
+
+#Change unit of chlorophyll from the novana data 
+novana_NO3["Resultat"] = novana_NO3["Resultat"] * 10**(-3)
+
+# Now filter for surface data (Dybde ≤ 2)
+novana_NO3_surface = novana_NO3[novana_NO3["Dybde"] <= 2]
+# Now filter for surface data (Dybde >8)
+novana_NO3_bottom = novana_NO3[novana_NO3["Dybde"] >= 4]
+
+# Ensure observation times are in datetime64 format
+obs_surface_times_NO3 = pd.to_datetime(novana_NO3_surface["Dato"].values)
+
+# Use .sel() with method="nearest"
+model_surface_NO3 = st17['NO3, NO3, NO3+2, g N/m3'].isel(element=0).interp(time=obs_surface_times_NO3).values
+
+obs_bottom_times_NO3 = pd.to_datetime(novana_NO3_bottom["Dato"].values)  # Ensure datetime format
+model_bottom_NO3 = st17['NO3, NO3, NO3+2, g N/m3'].isel(element=4).interp(time=obs_bottom_times_NO3).values
+
+# Extract corresponding observed data
+obs_surface_NO3 = novana_NO3_surface["Resultat"].values
+obs_bottom_NO3 = novana_NO3_bottom["Resultat"].values
+
+# ========================== PLOTTING NITRATE ===========================
+
+# Show model data for ammonia and station
+ax = data2['NO3, NO3, NO3+2, g N/m3'].sel(time="2015-08-06 12:00").plot(vmin=0,vmax=0.0025)
+ax.scatter(596013,6149164, marker ="s", s=25, c = 'red')
+ax.set_title("Nitrate on 2015-08-06 at 12:00", fontsize=14)
+
+# SURFACE NITRATE 
+
+# Create a figure and axis
+fig, ax = plt.subplots(figsize=(10, 5))
+
+# Plot MIKE model data (Temperature at element 0)
+st17['NO3, NO3, NO3+2, g N/m3'].isel(element=0).plot(ax=ax, label="MIKE Model Nitrate", color="red")
+
+# Plot Excel surface data (Observations)
+ax.plot(novana_NO3_surface["Dato"], novana_NO3_surface["Resultat"], marker="o", linestyle="-", color="blue", label="Observed Surface Nitrate (Depth ≤ 2)")
+
+# Formatting
+ax.set_xlabel("Date")
+ax.set_ylabel("Nitrate (g N m$^{-3}$)")
+#ax.set_title("Chlorophyll: MIKE Model vs Observations (Surface Data)")
+ax.legend()
+ax.grid(True)
+
+plt.xticks(rotation=45)  # Rotate x-axis labels for better readability
+plt.show()
+
+Residuals_surface_NO3 = model_surface_NO3 - obs_surface_NO3
+zero = np.zeros_like(Residuals_surface_NO3)
+
+plt.plot(novana_NO3_surface["Dato"], Residuals_surface_NO3, color = 'royalblue')
+plt.plot(novana_NO3_surface["Dato"], zero, color = 'lightcoral')
+plt.xlabel('Time')
+plt.ylabel('Residuals')
+#plt.legend('Surface temperature')
+plt.title('Surface Nitrate')
+plt.grid(False)
+plt.tight_layout()
+plt.show()
+
+
+# BOTTOM NITRATE 
+# Create a figure and axis
+fig, ax = plt.subplots(figsize=(10, 5))
+
+# Plot MIKE model data (Temperature at element 0)
+st17['NO3, NO3, NO3+2, g N/m3'].isel(element=4).plot(ax=ax, label="MIKE Model Nitrate", color="red")
+
+# Plot Excel surface data (Observations)
+ax.plot(novana_DIP_bottom["Dato"], novana_DIP_bottom["Resultat"], marker="o", linestyle="-", color="blue", label="Observed Bottom Nitrate (Depth > 4)")
+
+# Formatting
+ax.set_xlabel("Date")
+ax.set_ylabel("Nitrate (g N m$^{-3}$)")
+#ax.set_title("Chlorophyll: MIKE Model vs Observations (Bottom Data)")
+ax.legend()
+ax.grid(True)
+
+plt.xticks(rotation=45)  # Rotate x-axis labels for better readability
+plt.show()
+
+Residuals_bottom_NO3 = model_bottom_NO3 - obs_bottom_NO3
+zero = np.zeros_like(Residuals_bottom_NO3)
+
+plt.plot(novana_NO3_bottom["Dato"], Residuals_bottom_NO3, color = 'royalblue')
+plt.plot(novana_NO3_bottom["Dato"], zero, color = 'lightcoral')
+plt.xlabel('Time')
+plt.ylabel('Residuals')
+#plt.legend('bottom temperature')
+plt.title('Bottom Nitrate')
+plt.grid(False)
+plt.tight_layout()
+plt.show()
+
+
+# ========================== ERROR METRICS ===========================
+
+# Mean Squared Error (MSE)
+mse_surface_NO3 = mean_squared_error(obs_surface_NO3, model_surface_NO3)
+mse_bottom_NO3 = mean_squared_error(obs_bottom_NO3, model_bottom_NO3)
+
+# Root Mean Squared Error (RMSE)
+rmse_surface_NO3 = np.sqrt(mse_surface_NO3)
+rmse_bottom_NO3 = np.sqrt(mse_bottom_NO3)
+
+# Mean Absolute Error (MAE)
+mae_surface_NO3 = mean_absolute_error(obs_surface_NO3, model_surface_NO3)
+mae_bottom_NO3 = mean_absolute_error(obs_bottom_NO3, model_bottom_NO3)
+
+# Absolute Maximum Error (AME)
+ame_surface_NO3 = np.max(np.abs(obs_surface_NO3 - model_surface_NO3))
+ame_bottom_NO3 = np.max(np.abs(obs_bottom_NO3 - model_bottom_NO3))
+
+# Bias (Mean Error)
+bias_surface_NO3 = np.mean(model_surface_NO3 - obs_surface_NO3)
+bias_bottom_NO3 = np.mean(model_bottom_NO3 - obs_bottom_NO3)
+
+# Print the results
+print("Surface Nitrate Errors:")
+print(f"MSE: {mse_surface_NO3:.6f}, RMSE: {rmse_surface_NO3:.3f}, MAE: {mae_surface_NO3:.3f}, AME: {ame_surface_NO3:.3f}, Bias: {bias_surface_NO3:.3f}")
+
+print("\nBottom Nitrate Errors:")
+print(f"MSE: {mse_bottom_NO3:.6f}, RMSE: {rmse_bottom_NO3:.3f}, MAE: {mae_bottom_NO3:.3f}, AME: {ame_bottom_NO3:.3f}, Bias: {bias_bottom_NO3:.3f}")
+
